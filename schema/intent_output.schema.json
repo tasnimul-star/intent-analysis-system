@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/tasnimul-star/intent-analysis-system/schema/intent_output.schema.json",
+  "$id": "https://github.com/leadpoet/intent-analysis-system/schema/intent_output.schema.json",
   "title": "IntentDetails",
   "description": "Intent evidence returned by the engine for one company.",
   "type": "object",

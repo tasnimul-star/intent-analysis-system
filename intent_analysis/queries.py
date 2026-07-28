@@ -36,26 +36,27 @@ def build_query(evidence_type: EvidenceType, company_name: str) -> str:
     return templates[evidence_type]
 
 
-def build_ai_query(evidence_type: EvidenceType, company_name: str) -> str:
-    """ScrapingDog AI-mode extraction question for one evidence type.
+def build_ai_mode_query(
+    evidence_type: EvidenceType, company_name: str, company_domain: str
+) -> str:
+    """ScrapingDog /google/ai_mode question for one evidence type.
 
-    Instructs the AI to confirm the page is about THIS company and the given
-    intent type, then summarize; otherwise return NONE.
+    Asks the AI-mode search to find specific evidence for the company AND cite
+    the source URLs, so the answer can be parsed into evidence items.
     """
     what = {
-        EvidenceType.HIRING: "actively hiring, open roles, or a hiring surge",
-        EvidenceType.PR: "a press release, announcement, or award",
-        EvidenceType.FUNDING: "a funding round, investment, or acquisition",
+        EvidenceType.HIRING: "actively hiring, open job roles, or a hiring surge",
+        EvidenceType.PR: "recent press releases, announcements, or awards",
+        EvidenceType.FUNDING: "a recent funding round, investment, or acquisition",
         EvidenceType.TECH_STACK: "technologies it uses, adopted, or built with",
         EvidenceType.NEWS: "recent company news, a launch, expansion, or partnership",
-        EvidenceType.SOCIAL_MEDIA: "a notable social media post or update",
+        EvidenceType.SOCIAL_MEDIA: "recent notable social media posts or updates",
     }[evidence_type]
     return (
-        f"Does this page show that {company_name} has {what}? "
-        f"If and only if the page is about {company_name}, answer in one concise "
-        f"sentence describing the specific evidence and its date if shown. "
-        f"If the page is not about {company_name} or shows no such evidence, "
-        f"answer exactly: NONE"
+        f"Find evidence that {company_name} (website {company_domain}) has {what}. "
+        f"For each piece of evidence, give the exact source URL followed by one "
+        f"concise sentence describing it and its date if known. Only include "
+        f"evidence specifically about {company_name}. If there is none, reply NONE."
     )
 
 

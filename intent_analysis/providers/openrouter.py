@@ -1,7 +1,9 @@
-"""OpenRouter provider — LLM extraction/verification of intent evidence.
+"""OpenRouter provider — optional LLM structuring of the SD ai_mode answer.
 
-Given a company and scraped page text, ask a model whether the page is genuine
-intent evidence of a given type and, if so, produce a concise ``details`` string.
+Turns a free-text ScrapingDog /google/ai_mode answer into clean
+[{"url", "details"}] evidence items for one company + evidence type. This is
+optional (enabled with INTENT_USE_OPENROUTER=1); the engine regex-parses the
+answer otherwise.
 
 Reads OPENROUTER_API_KEY from the environment.
 INTENT_LLM_MODEL selects the model (default: a small, cheap model).
@@ -11,7 +13,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Dict, Optional
+from typing import Dict, List, Tuple
 
 import httpx
 
@@ -35,31 +37,31 @@ def _model() -> str:
     return os.environ.get("INTENT_LLM_MODEL", DEFAULT_MODEL)
 
 
-def verify_evidence(
+def structure_evidence(
     *,
     company_name: str,
     company_domain: str,
     evidence_type: str,
-    url: str,
-    page_text: str,
+    answer: str,
     timeout: float = DEFAULT_TIMEOUT,
-) -> Optional[str]:
-    """Return a ``details`` string if the page is genuine intent evidence, else None.
+) -> List[Tuple[str, str]]:
+    """Return [(url, details)] extracted from an ai_mode answer.
 
-    The model must confirm the page is about *this* company and matches the
-    requested evidence type before details are returned.
+    Keeps only evidence that is specifically about THIS company and matches the
+    given evidence type.
     """
     prompt = (
-        "You verify B2B intent evidence. Given a company and a web page, decide "
-        "whether the page is genuine evidence of the specified intent type for "
-        "THIS company (not a different company, directory, or unrelated page).\n\n"
+        "You extract structured B2B intent evidence from a search answer.\n"
         f"Company: {company_name} (domain: {company_domain})\n"
-        f"Intent type: {evidence_type}\n"
-        f"Page URL: {url}\n"
-        f"Page text (truncated):\n{page_text[:4000]}\n\n"
+        f"Evidence type: {evidence_type}\n\n"
+        "From the answer below, extract every item that is genuine evidence of "
+        "the given intent type FOR THIS COMPANY (ignore other companies, "
+        "directories, or unrelated items). Each item needs a real source URL "
+        "and a one-sentence detail.\n\n"
+        f"Answer:\n{answer[:6000]}\n\n"
         "Respond with strict JSON only:\n"
-        '{"is_evidence": true|false, "details": "one concise sentence describing '
-        'the evidence and why it signals intent, or empty if not evidence"}'
+        '{"items": [{"url": "https://...", "details": "one sentence"}]}\n'
+        "If there is no valid evidence, return {\"items\": []}."
     )
     payload = {
         "model": _model(),
@@ -78,8 +80,14 @@ def verify_evidence(
     try:
         parsed = json.loads(content)
     except (json.JSONDecodeError, TypeError):
-        return None
-    if not parsed.get("is_evidence"):
-        return None
-    details = str(parsed.get("details") or "").strip()
-    return details or None
+        return []
+
+    out: List[Tuple[str, str]] = []
+    for item in parsed.get("items", []) if isinstance(parsed, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        details = str(item.get("details") or "").strip()
+        if url.startswith("http") and details:
+            out.append((url, details))
+    return out

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/tasnimul-star/intent-analysis-system/schema/company_input.schema.json",
+  "$id": "https://github.com/leadpoet/intent-analysis-system/schema/company_input.schema.json",
   "title": "CompanyInput",
   "description": "Company identity supplied to the intent analysis engine.",
   "type": "object",

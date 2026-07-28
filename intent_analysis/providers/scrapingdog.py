@@ -1,9 +1,10 @@
 """ScrapingDog provider — the primary engine for discovery and extraction.
 
-Three capabilities, all off the ScrapingDog API:
-  - google_search(query)        -> discover candidate evidence URLs (SERP)
-  - scrape_ai(url, ai_query)    -> AI-mode extraction of structured details
-  - scrape_text(url)            -> raw page text (fallback / for LLM verify)
+Capabilities (all off the ScrapingDog API):
+  - google_ai_mode(query) -> AI answer text (GET /google/ai_mode). A query->answer
+    AI search (like Google's AI Overview) that summarizes and cites sources.
+  - google_search(query)   -> SERP results [{url, title, snippet}] (GET /google).
+  - scrape_text(url)       -> cleaned page text (GET /scrape), fallback for LLM use.
 
 Reads SCRAPINGDOG_API_KEY from the environment.
 """
@@ -12,13 +13,14 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 
 SCRAPINGDOG_SCRAPE_URL = "https://api.scrapingdog.com/scrape"
 SCRAPINGDOG_GOOGLE_URL = "https://api.scrapingdog.com/google"
-DEFAULT_TIMEOUT = 40.0
+SCRAPINGDOG_AI_MODE_URL = "https://api.scrapingdog.com/google/ai_mode"
+DEFAULT_TIMEOUT = 45.0
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
@@ -38,6 +40,38 @@ def _strip_html(html: str, *, max_chars: int = 6000) -> str:
     text = _TAG_RE.sub(" ", html or "")
     text = _WS_RE.sub(" ", text).strip()
     return text[:max_chars]
+
+
+def google_ai_mode(query: str, *, timeout: float = DEFAULT_TIMEOUT) -> str:
+    """Google AI-mode answer for a natural-language query (GET /google/ai_mode).
+
+    Returns the AI answer as text. The query should ask for specific evidence
+    plus source URLs so the answer can be parsed into evidence items.
+    """
+    params = {"api_key": _api_key(), "query": query, "country": "us"}
+    with httpx.Client(timeout=timeout) as client:
+        resp = client.get(SCRAPINGDOG_AI_MODE_URL, params=params)
+    if resp.status_code != 200:
+        raise ScrapingDogError(
+            f"scrapingdog ai_mode HTTP {resp.status_code}: {resp.text[:150]}"
+        )
+    # Response may be JSON ({text|markdown|body|message|answer|ai_response: ...})
+    # or plain text.
+    ctype = resp.headers.get("content-type", "")
+    if ctype.startswith("application/json"):
+        try:
+            data = resp.json()
+        except ValueError:
+            return resp.text.strip()
+        if isinstance(data, dict):
+            for key in ("ai_response", "answer", "text", "markdown", "body", "message"):
+                val = data.get(key)
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+            return str(data)
+        return str(data)
+    body = resp.text or ""
+    return _strip_html(body) if "<" in body else body.strip()
 
 
 def google_search(
@@ -80,43 +114,9 @@ def google_search(
     return out
 
 
-def scrape_ai(
-    url: str, ai_query: str, *, dynamic: bool = False, timeout: float = DEFAULT_TIMEOUT
-) -> str:
-    """AI-mode extraction: ask ScrapingDog to pull an answer from the page.
-
-    Uses the ``ai_query`` parameter so ScrapingDog's AI extraction returns a
-    focused answer rather than raw HTML.
-    """
-    params = {
-        "api_key": _api_key(),
-        "url": url,
-        "ai_query": ai_query,
-        "dynamic": "true" if dynamic else "false",
-    }
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.get(SCRAPINGDOG_SCRAPE_URL, params=params)
-    if resp.status_code != 200:
-        raise ScrapingDogError(
-            f"scrapingdog ai HTTP {resp.status_code}: {resp.text[:150]}"
-        )
-    # AI mode may return JSON ({"ai_response": ...}) or plain text.
-    ctype = resp.headers.get("content-type", "")
-    if ctype.startswith("application/json"):
-        try:
-            data = resp.json()
-        except ValueError:
-            return resp.text.strip()
-        for key in ("ai_response", "ai_result", "answer", "data", "result"):
-            val = data.get(key) if isinstance(data, dict) else None
-            if val:
-                return val if isinstance(val, str) else str(val)
-        return str(data)
-    return _strip_html(resp.text) if "<" in resp.text else resp.text.strip()
-
-
 def scrape_text(url: str, *, max_chars: int = 6000, timeout: float = DEFAULT_TIMEOUT) -> str:
     """Return cleaned page text, escalating to dynamic render when the body is thin."""
+
     def _fetch(dynamic: bool) -> str:
         params = {
             "api_key": _api_key(),
