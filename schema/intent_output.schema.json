@@ -2,25 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/tasnimul-star/intent-analysis-system/schema/intent_output.schema.json",
   "title": "IntentDetails",
-  "description": "Intent details returned by the engine for one company.",
+  "description": "Intent evidence returned by the engine for one company.",
   "type": "object",
   "properties": {
     "company": {
       "type": "object",
-      "description": "Echo of the resolved company identity the signals were found for.",
       "properties": {
         "name": { "type": "string" },
         "domain": { "type": "string" },
-        "website": { "type": "string", "format": "uri" },
-        "linkedin": { "type": "string", "format": "uri" }
+        "linkedin": { "type": "string" }
       },
-      "required": ["name"],
-      "additionalProperties": true
+      "required": ["name", "domain"],
+      "additionalProperties": false
     },
-    "signals": {
+    "evidence": {
       "type": "array",
-      "description": "Discovered intent signals, one entry per finding.",
-      "items": { "$ref": "#/$defs/intentSignal" }
+      "description": "Discovered intent evidence items.",
+      "items": { "$ref": "#/$defs/evidenceItem" }
     },
     "analyzed_at": {
       "type": "string",
@@ -28,68 +26,28 @@
       "format": "date-time"
     }
   },
-  "required": ["company", "signals"],
+  "required": ["company", "evidence"],
   "additionalProperties": false,
   "$defs": {
-    "intentSignal": {
+    "evidenceItem": {
       "type": "object",
       "properties": {
-        "type": {
+        "evidence_url": {
           "type": "string",
-          "description": "Signal category.",
-          "enum": ["hiring", "pr", "funding", "tech_stack", "news", "social_media"]
-        },
-        "found": {
-          "type": "boolean",
-          "description": "Whether a signal of this type was found for the company."
-        },
-        "summary": {
-          "type": "string",
-          "description": "Short human-readable description of the signal."
-        },
-        "confidence": {
-          "type": "number",
-          "description": "Confidence the signal is real and correctly attributed (0.0-1.0).",
-          "minimum": 0.0,
-          "maximum": 1.0
-        },
-        "observed_at": {
-          "type": "string",
-          "description": "Date the signal event occurred or was published.",
-          "format": "date-time"
-        },
-        "evidence": {
-          "type": "array",
-          "description": "Supporting evidence for the signal.",
-          "items": { "$ref": "#/$defs/evidence" }
-        }
-      },
-      "required": ["type", "found"],
-      "additionalProperties": false
-    },
-    "evidence": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "description": "Source URL for the evidence.",
+          "description": "Source URL for the intent evidence.",
           "format": "uri"
         },
-        "source": {
+        "evidence_type": {
           "type": "string",
-          "description": "Origin of the evidence (e.g. job board, press site, provider name)."
+          "description": "Category of intent evidence.",
+          "enum": ["hiring", "pr", "funding", "tech_stack", "news", "social_media"]
         },
-        "snippet": {
+        "details": {
           "type": "string",
-          "description": "Relevant excerpt from the source."
-        },
-        "published_at": {
-          "type": "string",
-          "description": "Publication date of the source, if known.",
-          "format": "date-time"
+          "description": "Description of the evidence and why it signals intent."
         }
       },
-      "required": ["url"],
+      "required": ["evidence_url", "evidence_type", "details"],
       "additionalProperties": false
     }
   }

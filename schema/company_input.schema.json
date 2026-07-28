@@ -9,43 +9,16 @@
       "type": "string",
       "description": "Company name."
     },
-    "website": {
-      "type": "string",
-      "description": "Primary company website URL.",
-      "format": "uri"
-    },
     "domain": {
       "type": "string",
-      "description": "Root domain (e.g. example.com). Derivable from website; provided for convenience."
+      "description": "Company root domain (e.g. example.com)."
     },
     "linkedin": {
       "type": "string",
-      "description": "Company LinkedIn URL.",
+      "description": "Company LinkedIn URL (optional).",
       "format": "uri"
-    },
-    "location": {
-      "type": "string",
-      "description": "Headquarters or primary location (free text)."
-    },
-    "industry": {
-      "type": "string",
-      "description": "Industry or sector, if known."
-    },
-    "requested_signal_types": {
-      "type": "array",
-      "description": "Optional subset of signal types to check. If omitted, the engine checks all supported types.",
-      "items": {
-        "type": "string",
-        "enum": ["hiring", "pr", "funding", "tech_stack", "news", "social_media"]
-      },
-      "uniqueItems": true
     }
   },
-  "required": ["name"],
-  "anyOf": [
-    { "required": ["website"] },
-    { "required": ["domain"] },
-    { "required": ["linkedin"] }
-  ],
+  "required": ["name", "domain"],
   "additionalProperties": false
 }

@@ -1,8 +1,5 @@
 """Intent Analysis System — data contract.
 
-Schema only: these types define the input/output contract for the intent
-analysis engine. No provider integrations or scoring logic yet.
-
 Mirrors:
   - schema/company_input.schema.json
   - schema/intent_output.schema.json
@@ -10,13 +7,13 @@ Mirrors:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import List, Optional
 
 
-class SignalType(str, Enum):
-    """Supported intent signal categories."""
+class EvidenceType(str, Enum):
+    """Categories of intent evidence."""
 
     HIRING = "hiring"
     PR = "pr"
@@ -28,58 +25,38 @@ class SignalType(str, Enum):
 
 @dataclass
 class CompanyInput:
-    """Company identity supplied to the engine.
-
-    At least one of ``website``, ``domain``, or ``linkedin`` should be provided
-    in addition to ``name`` so the company can be resolved unambiguously.
-    """
+    """Company identity supplied to the engine."""
 
     name: str
-    website: Optional[str] = None
-    domain: Optional[str] = None
+    domain: str
     linkedin: Optional[str] = None
-    location: Optional[str] = None
-    industry: Optional[str] = None
-    # Optional subset of signal types to check. Empty/None => check all.
-    requested_signal_types: Optional[List[SignalType]] = None
 
 
 @dataclass
-class Evidence:
-    """Supporting evidence for a single intent signal."""
+class EvidenceItem:
+    """One piece of discovered intent evidence."""
 
-    url: str
-    source: Optional[str] = None
-    snippet: Optional[str] = None
-    published_at: Optional[str] = None  # ISO 8601 date-time
+    evidence_url: str
+    evidence_type: EvidenceType
+    details: str
 
-
-@dataclass
-class IntentSignal:
-    """One discovered intent signal for a company."""
-
-    type: SignalType
-    found: bool
-    summary: Optional[str] = None
-    confidence: Optional[float] = None  # 0.0 - 1.0
-    observed_at: Optional[str] = None  # ISO 8601 date-time
-    evidence: List[Evidence] = field(default_factory=list)
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["evidence_type"] = self.evidence_type.value
+        return d
 
 
 @dataclass
 class IntentDetails:
-    """Intent details returned by the engine for one company."""
+    """Intent evidence returned by the engine for one company."""
 
     company: CompanyInput
-    signals: List[IntentSignal] = field(default_factory=list)
+    evidence: List[EvidenceItem] = field(default_factory=list)
     analyzed_at: Optional[str] = None  # ISO 8601 date-time
 
-
-def analyze_intent(company: CompanyInput) -> IntentDetails:
-    """Analyze a company and return its intent details.
-
-    Not implemented yet — this repository defines the contract only. A future
-    implementation will fan out one checker per requested signal type, gather
-    evidence, and assemble the IntentDetails result.
-    """
-    raise NotImplementedError("intent analysis engine is not implemented yet")
+    def to_dict(self) -> dict:
+        return {
+            "company": asdict(self.company),
+            "evidence": [e.to_dict() for e in self.evidence],
+            "analyzed_at": self.analyzed_at,
+        }

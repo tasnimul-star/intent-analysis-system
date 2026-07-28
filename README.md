@@ -1,52 +1,73 @@
 # Intent Analysis System
 
-Standalone service that takes **company details** and returns **intent details** —
-structured buying/growth signals discovered for that specific company.
+Takes **company details** and returns **intent evidence** — buying/growth signals
+discovered for that specific company, each with a source URL, a type, and details.
 
-This repository is **separate from the sourcing model**. It defines the contract
-(input/output schema) for the intent analysis system. It intentionally contains
-**no working implementation yet** — this is the schema/interface first.
+This repository is **separate from the sourcing model.**
 
-## What it does
+## Input / Output
 
 ```
-Input:  company identity  (name, website, linkedin, …)
-            │
-            ▼
-   Intent Analysis Engine
-   (requests signal types → checks each for the company → attaches evidence)
-            │
-            ▼
-Output: intent details  (list of verified intent signals with evidence)
+Input:   { name, domain, linkedin? }
+Output:  { company, evidence: [ { evidence_url, evidence_type, details } ], analyzed_at }
 ```
 
-Given a company, the engine requests a set of **signal types** and checks each one
-for that company, then returns the discovered signals with supporting evidence.
+- `schema/company_input.schema.json` — input contract (JSON Schema)
+- `schema/intent_output.schema.json` — output contract (JSON Schema)
+- `intent_analysis/models.py` — same contract as Python dataclasses
 
-## Signal types
+## Evidence types
 
-| Type | Meaning |
-|------|---------|
-| `hiring` | Active job postings / hiring surges relevant to buying intent |
-| `pr` | Press releases, announcements, awards |
-| `funding` | Funding rounds, investments, M&A |
-| `tech_stack` | Technologies adopted, added, or removed |
-| `news` | General company news and market events |
-| `social_media` | Social posts, engagement, executive activity |
+`hiring` · `pr` · `funding` · `tech_stack` · `news` · `social_media`
 
-## Use cases
+## How it works (end to end)
 
-1. **Enrichment** — after a company is selected, run this to discover *additional*
-   intent signals beyond whatever first surfaced it.
-2. **Refresh** — re-run for existing companies/leads to keep intent signals current.
+**ScrapingDog-first** — SD does both discovery and extraction. For each evidence type:
 
-## Contract
+1. **Discovery** — ScrapingDog **Google search** finds candidate evidence URLs.
+   (Exa `/search` is an optional fallback: set `INTENT_DISCOVERY=exa`.)
+2. **Extraction** — ScrapingDog **AI mode** (`ai_query`) reads each page and
+   returns a one-sentence `details` string, or `NONE` when the page isn't
+   evidence for this company.
+3. **Verify (optional)** — an OpenRouter LLM second pass re-confirms the item is
+   genuine evidence for *this* company (`INTENT_USE_OPENROUTER=1`).
 
-- `schema/company_input.schema.json` — the input company object (JSON Schema).
-- `schema/intent_output.schema.json` — the output intent details object (JSON Schema).
-- `intent_analysis/models.py` — the same contract as Python dataclasses.
+Only confirmed items are returned.
 
-## Status
+```
+company ─▶ SD Google search ─▶ SD AI extract ─▶ (opt) OpenRouter verify ─▶ evidence[]
+```
 
-Schema only. No provider integrations, scoring, or incentive logic yet — those are
-deliberately out of scope for this first push.
+## Usage
+
+```bash
+pip install -r requirements.txt
+
+export EXA_API_KEY=...
+export SCRAPINGDOG_API_KEY=...
+export OPENROUTER_API_KEY=...
+
+python cli.py --name "Acme Inc" --domain acme.com
+# optional: restrict evidence types
+python cli.py --name "Acme Inc" --domain acme.com --types hiring funding news
+```
+
+Or as a library:
+
+```python
+from intent_analysis import CompanyInput, analyze_intent
+
+result = analyze_intent(CompanyInput(name="Acme Inc", domain="acme.com"))
+print(result.to_dict())
+```
+
+## Configuration
+
+| Env var | Purpose | Required |
+|---------|---------|----------|
+| `SCRAPINGDOG_API_KEY` | SD Google search + AI extraction (primary) | yes |
+| `EXA_API_KEY` | Optional discovery fallback (`INTENT_DISCOVERY=exa`) | no |
+| `OPENROUTER_API_KEY` | Optional LLM verify pass (`INTENT_USE_OPENROUTER=1`) | no |
+| `INTENT_LLM_MODEL` | Model override (default `openai/gpt-4o-mini`) | no |
+
+See `.env.example`. Only `SCRAPINGDOG_API_KEY` is needed for the default path.
